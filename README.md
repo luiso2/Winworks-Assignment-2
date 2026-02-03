@@ -141,11 +141,12 @@ winworks-assignment-2/
 
 ### Part 1: Bet Finder (Frontend)
 - ✅ Login with Play23 credentials
-- ✅ Browse available games by league
+- ✅ Browse available games by league (NBA, NFL, College BB)
+- ✅ Live odds fetched from Play23 API (with fallback data)
 - ✅ View spread, total, and moneyline odds
 - ✅ Select bet and specify stake amount
-- ✅ Real-time payout calculation
-- ✅ Place bet button
+- ✅ Real-time payout calculation (American odds)
+- ✅ Place bet button with password confirmation
 
 ### Part 2: Bet Placer (Backend)
 - ✅ Direct API communication (no browser automation)
@@ -175,13 +176,13 @@ winworks-assignment-2/
 
 ## Limitations
 
-1. **Odds Display:** Uses sample data for game display. Full HTML parsing of Play23's odds responses would require more sophisticated parsing.
+1. **Odds Display:** Attempts to parse live odds from Play23 HTML responses. Falls back to league-specific sample data if parsing fails (Play23's HTML structure can vary).
 
 2. **Session Timeout:** Basic handling—production would need automatic re-authentication.
 
-3. **Real-time Updates:** Odds are fetched on page load only, not live-updated.
+3. **Real-time Updates:** Odds are fetched on page load and league change, not continuously live-updated.
 
-4. **Single League:** Default view shows NBA; league switching works but with sample data.
+4. **League Support:** NBA, NFL, and College Basketball have dedicated fallback data. Other leagues may show empty if live parsing fails.
 
 ---
 

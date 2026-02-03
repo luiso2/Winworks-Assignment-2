@@ -8,53 +8,8 @@ const API_BASE = 'http://localhost:3001/api';
 let sessionId = null;
 let selectedBet = null;
 
-// Sample games data (based on real Play23 structure)
-const sampleGames = [
-  {
-    id: '5421295',
-    date: 'Feb 03',
-    time: '7:40 PM',
-    team1: { name: 'LA LAKERS', rot: '565' },
-    team2: { name: 'BRK NETS', rot: '566' },
-    spread1: '-7½', spreadOdds1: '-115',
-    spread2: '+7½', spreadOdds2: '-105',
-    total: '221½', totalOver: '-110', totalUnder: '-110',
-    ml1: '-300', ml2: '+250'
-  },
-  {
-    id: '5421296',
-    date: 'Feb 03',
-    time: '8:10 PM',
-    team1: { name: 'BOS CELTICS', rot: '569' },
-    team2: { name: 'DAL MAVERICKS', rot: '570' },
-    spread1: '-5½', spreadOdds1: '-110',
-    spread2: '+5½', spreadOdds2: '-110',
-    total: '218', totalOver: '-110', totalUnder: '-110',
-    ml1: '-220', ml2: '+180'
-  },
-  {
-    id: '5421297',
-    date: 'Feb 03',
-    time: '7:10 PM',
-    team1: { name: 'DEN NUGGETS', rot: '561' },
-    team2: { name: 'DET PISTONS', rot: '562' },
-    spread1: '-9', spreadOdds1: '-110',
-    spread2: '+9', spreadOdds2: '-110',
-    total: '224½', totalOver: '-110', totalUnder: '-110',
-    ml1: '-400', ml2: '+320'
-  },
-  {
-    id: '5421298',
-    date: 'Feb 03',
-    time: '8:10 PM',
-    team1: { name: 'CHI BULLS', rot: '571' },
-    team2: { name: 'MIL BUCKS', rot: '572' },
-    spread1: '+8', spreadOdds1: '-110',
-    spread2: '-8', spreadOdds2: '-110',
-    total: '231', totalOver: '-110', totalUnder: '-110',
-    ml1: '+280', ml2: '-350'
-  }
-];
+// Current games data (loaded from API)
+let currentGames = [];
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen');
@@ -136,12 +91,25 @@ async function loadGames() {
       headers: { 'X-Session-Id': sessionId }
     });
 
-    await response.json();
+    const data = await response.json();
 
     gamesLoading.classList.add('hidden');
 
-    // Render games using safe DOM methods
-    renderGames(sampleGames);
+    if (data.success && data.odds && data.odds.games && data.odds.games.length > 0) {
+      currentGames = data.odds.games;
+      const sourceLabel = data.odds.source === 'live' ? ' (Live)' : '';
+      console.log(`Loaded ${currentGames.length} games${sourceLabel}`);
+      renderGames(currentGames);
+    } else {
+      showAppStatus('No games available for this league', 'info');
+      gamesList.textContent = '';
+      const noGames = document.createElement('div');
+      noGames.style.textAlign = 'center';
+      noGames.style.padding = '40px';
+      noGames.style.color = 'rgba(255,255,255,0.5)';
+      noGames.textContent = 'No games available';
+      gamesList.appendChild(noGames);
+    }
 
   } catch (error) {
     gamesLoading.classList.add('hidden');
@@ -378,7 +346,7 @@ function searchGames() {
     return;
   }
 
-  const filteredGames = sampleGames.filter(game =>
+  const filteredGames = currentGames.filter(game =>
     game.team1.name.toLowerCase().includes(query) ||
     game.team2.name.toLowerCase().includes(query)
   );
