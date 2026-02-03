@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Play23 Bet Finder - Winworks Assignment</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #D4A84B;
+    }
+
+    header p {
+      color: rgba(255,255,255,0.5);
+      font-size: 14px;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(20px);
+    }
+
+    .card h2 {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #D4A84B;
+      background: rgba(255,255,255,0.05);
+    }
+
+    input::placeholder {
+      color: rgba(255,255,255,0.3);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #D4A84B, #B8922F);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(212,168,75,0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .balance-display {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .balance-item {
+      background: rgba(212,168,75,0.1);
+      border: 1px solid rgba(212,168,75,0.2);
+      padding: 12px 20px;
+      border-radius: 8px;
+    }
+
+    .balance-item span {
+      display: block;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .balance-item strong {
+      font-size: 20px;
+      color: #D4A84B;
+    }
+
+    .games-list {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .game-item {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .game-item:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(212,168,75,0.3);
+    }
+
+    .game-teams {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .team {
+      font-weight: 600;
+    }
+
+    .team-rot {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+    }
+
+    .game-odds {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .odds-btn {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .odds-btn:hover {
+      background: rgba(212,168,75,0.2);
+      border-color: #D4A84B;
+    }
+
+    .odds-btn.selected {
+      background: #D4A84B;
+      color: #000;
+      border-color: #D4A84B;
+    }
+
+    .odds-label {
+      font-size: 10px;
+      color: rgba(255,255,255,0.4);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .bet-slip {
+      position: sticky;
+      top: 20px;
+    }
+
+    .bet-slip-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .selected-bet {
+      background: rgba(212,168,75,0.1);
+      border: 1px solid rgba(212,168,75,0.2);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .selected-bet h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .selected-bet p {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .bet-summary {
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .bet-summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .bet-summary-row span:first-child {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .bet-summary-row.total {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 8px;
+      margin-top: 8px;
+      font-weight: 600;
+    }
+
+    .bet-summary-row.total span:last-child {
+      color: #D4A84B;
+    }
+
+    .status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .status.success {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #22c55e;
+    }
+
+    .status.error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #ef4444;
+    }
+
+    .status.info {
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.3);
+      color: #3b82f6;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(212,168,75,0.2);
+      border-top-color: #D4A84B;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .login-screen {
+      max-width: 400px;
+      margin: 100px auto;
+    }
+
+    .login-screen .card {
+      text-align: center;
+    }
+
+    .login-screen h1 {
+      color: #D4A84B;
+      margin-bottom: 8px;
+    }
+
+    .login-screen p {
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 24px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .user-name {
+      font-weight: 600;
+      color: #D4A84B;
+    }
+  </style>
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <div class="card">
+      <h1>Play23 Bet Finder</h1>
+      <p>Winworks Take-Home Assignment</p>
+      <div id="login-status"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="Enter username" value="wwplayer1" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Enter password" value="123" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="main-app" class="hidden">
+    <header>
+      <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h1>Play23 Bet Finder</h1>
+          <p>Search, browse, and place bets</p>
+        </div>
+        <div class="user-info">
+          <span class="user-name" id="display-username">-</span>
+          <button class="btn btn-secondary" id="logout-btn">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container">
+      <div class="balance-display">
+        <div class="balance-item">
+          <span>Current Balance</span>
+          <strong id="balance-current">$0</strong>
+        </div>
+        <div class="balance-item">
+          <span>Available</span>
+          <strong id="balance-available">$0</strong>
+        </div>
+        <div class="balance-item">
+          <span>At Risk</span>
+          <strong id="balance-risk">$0</strong>
+        </div>
+      </div>
+
+      <div id="app-status"></div>
+
+      <div class="grid">
+        <div>
+          <div class="card bet-slip">
+            <h2>Bet Slip</h2>
+            <div id="bet-slip-empty" class="bet-slip-empty">
+              <p>Select a bet from the games list</p>
+            </div>
+            <div id="bet-slip-content" class="hidden">
+              <div id="selected-bet" class="selected-bet">
+                <h4 id="slip-team">-</h4>
+                <p id="slip-details">-</p>
+              </div>
+              <div class="form-group">
+                <label>Stake Amount (Min $25)</label>
+                <input type="number" id="stake-amount" placeholder="25" min="25" value="25">
+              </div>
+              <div class="form-group">
+                <label>Password (to confirm)</label>
+                <input type="password" id="confirm-password" placeholder="Enter password">
+              </div>
+              <div class="bet-summary">
+                <div class="bet-summary-row">
+                  <span>Stake</span>
+                  <span id="summary-stake">$25</span>
+                </div>
+                <div class="bet-summary-row">
+                  <span>Odds</span>
+                  <span id="summary-odds">-115</span>
+                </div>
+                <div class="bet-summary-row total">
+                  <span>To Win</span>
+                  <span id="summary-towin">$21.74</span>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="width: 100%" id="place-bet-btn">Place Bet</button>
+              <button class="btn btn-secondary" style="width: 100%; margin-top: 8px" id="clear-bet-btn">Clear</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <h2>Available Games</h2>
+            <div class="form-group" style="display: flex; gap: 12px;">
+              <select id="league-select" style="width: 200px;">
+                <option value="535">NBA</option>
+                <option value="43">College Basketball</option>
+                <option value="4029">NFL</option>
+                <option value="2">NHL</option>
+                <option value="1">MLB</option>
+              </select>
+              <input type="text" id="search-input" placeholder="Search team..." style="flex: 1;">
+              <button class="btn btn-secondary" id="search-btn">Search</button>
+            </div>
+            <div id="games-loading" class="loading hidden">
+              <div class="spinner"></div>
+            </div>
+            <div id="games-list" class="games-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
