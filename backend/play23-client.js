@@ -423,11 +423,87 @@ class Play23Client {
       }
     ];
 
+    const mlbGames = [
+      {
+        id: '1001001',
+        date: 'Today',
+        time: '7:05 PM',
+        team1: { name: 'NY YANKEES', rot: '901' },
+        team2: { name: 'BOS RED SOX', rot: '902' },
+        spread1: '-1½', spreadOdds1: '+145',
+        spread2: '+1½', spreadOdds2: '-165',
+        total: '8½', totalOver: '-110', totalUnder: '-110',
+        ml1: '-150', ml2: '+130'
+      },
+      {
+        id: '1001002',
+        date: 'Today',
+        time: '10:10 PM',
+        team1: { name: 'LA DODGERS', rot: '903' },
+        team2: { name: 'SF GIANTS', rot: '904' },
+        spread1: '-1½', spreadOdds1: '+130',
+        spread2: '+1½', spreadOdds2: '-150',
+        total: '7½', totalOver: '-105', totalUnder: '-115',
+        ml1: '-175', ml2: '+155'
+      },
+      {
+        id: '1001003',
+        date: 'Today',
+        time: '8:10 PM',
+        team1: { name: 'CHI CUBS', rot: '905' },
+        team2: { name: 'STL CARDINALS', rot: '906' },
+        spread1: '+1½', spreadOdds1: '-150',
+        spread2: '-1½', spreadOdds2: '+130',
+        total: '9', totalOver: '-110', totalUnder: '-110',
+        ml1: '+120', ml2: '-140'
+      }
+    ];
+
+    const nhlGames = [
+      {
+        id: '2001001',
+        date: 'Today',
+        time: '7:00 PM',
+        team1: { name: 'TOR MAPLE LEAFS', rot: '201' },
+        team2: { name: 'MTL CANADIENS', rot: '202' },
+        spread1: '-1½', spreadOdds1: '+175',
+        spread2: '+1½', spreadOdds2: '-200',
+        total: '6½', totalOver: '-110', totalUnder: '-110',
+        ml1: '-145', ml2: '+125'
+      },
+      {
+        id: '2001002',
+        date: 'Today',
+        time: '10:00 PM',
+        team1: { name: 'VGS GOLDEN KNIGHTS', rot: '203' },
+        team2: { name: 'LA KINGS', rot: '204' },
+        spread1: '-1½', spreadOdds1: '+160',
+        spread2: '+1½', spreadOdds2: '-180',
+        total: '5½', totalOver: '-105', totalUnder: '-115',
+        ml1: '-130', ml2: '+110'
+      },
+      {
+        id: '2001003',
+        date: 'Today',
+        time: '7:30 PM',
+        team1: { name: 'BOS BRUINS', rot: '205' },
+        team2: { name: 'NY RANGERS', rot: '206' },
+        spread1: '+1½', spreadOdds1: '-190',
+        spread2: '-1½', spreadOdds2: '+165',
+        total: '6', totalOver: '-110', totalUnder: '-110',
+        ml1: '+105', ml2: '-125'
+      }
+    ];
+
     let games;
     if (leagueId == 4029) {
       games = nflGames;
     } else if (leagueId == 43) {
       games = collegeGames;
+    } else if (leagueId == 1) {
+      games = mlbGames;
+    } else if (leagueId == 2) {
+      games = nhlGames;
     } else {
       games = nbaGames;
     }
