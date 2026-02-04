@@ -469,9 +469,203 @@ curl -X POST http://localhost:3001/api/login \
 
 ---
 
+# Part 3: Critical Bug Fixes - Bet Placement
+
+## Prompt 15: Bet Placement Failing with "Input string was not in a correct format"
+
+**Me:**
+```
+The bet placement is failing at the Confirm step with error "Input string was not in a correct format"
+```
+
+**Claude:**
+I'll analyze the Play23 frontend JavaScript to understand the exact parameter format.
+
+### Investigation Process
+```javascript
+// Downloaded and analyzed the minified React frontend (3.8MB main.db15c074.js)
+// Found the Up() function that transforms compile response to detailData
+// Found the Wp() function that makes the confirm/post requests
+```
+
+### Root Cause Discovered
+```javascript
+// WRONG - What we were sending:
+amountType: 'W'  // String
+
+// CORRECT - What Play23 expects:
+amountType: 1    // Integer (1 = wager amount)
+```
+
+**Fix Applied in play23-client.js:**
+```javascript
+const confirmPayload = new URLSearchParams({
+  WT: wagerType,
+  open: 0,
+  IDWT: IDWT,
+  sel: selection,
+  amountType: 1,  // KEY FIX: Must be integer, NOT string 'W'
+  sameAmount: true,
+  detailData: JSON.stringify(detailData),
+  // ... rest of params
+});
+```
+
+---
+
+## Prompt 16: Post Step Failing with "Value cannot be null"
+
+**Me:**
+```
+Confirm works now but Post step fails with "Value cannot be null"
+```
+
+**Claude:**
+The endpoint and payload format are wrong. Let me trace the actual frontend flow.
+
+### Discovery
+```javascript
+// WRONG endpoint:
+POST /wager/PostWagerHelper.aspx
+Body: WT=0&sel=...
+
+// CORRECT endpoint:
+POST /wager/PostWagerMultipleHelper.aspx
+Body: postWagerRequests=[{...}]  // Array wrapped in JSON
+```
+
+### Additional Fix - Password Field Name
+```javascript
+// WRONG:
+password: '123'
+
+// CORRECT:
+confirmPassword: '123'  // Different field name in post step!
+```
+
+**Complete Fix Applied:**
+```javascript
+const postWagerRequest = {
+  WT: wagerType,
+  open: 0,
+  IDWT: IDWT,
+  sel: selection,
+  sameAmount: true,
+  amountType: 1,
+  detailData: JSON.stringify(detailData),
+  confirmPassword: password,  // KEY: Use 'confirmPassword', not 'password'
+  sameAmountNumber: amount.toString(),
+  useFreePlayAmount: false,
+  roundRobinCombinations: '0'
+};
+
+const postPayload = new URLSearchParams({
+  postWagerRequests: JSON.stringify([postWagerRequest])  // Wrapped in array
+}).toString();
+
+await client.post('/wager/PostWagerMultipleHelper.aspx', postPayload, {...});
+```
+
+---
+
+## Prompt 17: Verification - Successful Bet Placement
+
+**Me:**
+```
+Test the complete bet placement flow
+```
+
+**Claude:**
+```bash
+node test-complete-bet-v2.js
+```
+
+**Output:**
+```
+1. Logging in...
+   Logged in!
+
+2. Getting live odds...
+   Game: PHI 76ERS vs GS WARRIORS
+   Selection: 0_5421290_5_-110
+
+3. Compiling wager...
+   Compiled: [575] PHI 76ERS +5-110
+   IDWT: 966101
+
+4. Confirming wager...
+   Confirmed! Risk: $28, Win: $25
+
+5. Posting wager (PLACING THE BET)...
+
+=== POST RESPONSE ===
+{
+  "result": [{
+    "WagerPostResult": {
+      "details": [{
+        "TicketNumber": "207810429",
+        "Risk": 28,
+        "Win": 25,
+        "WagerTypeDesc": "STRAIGHT BET"
+      }]
+    }
+  }]
+}
+
+✅ BET PLACED SUCCESSFULLY!
+   Ticket #: 207810429
+```
+
+---
+
+## Prompt 18: Fix Balance Endpoint (500 Error)
+
+**Me:**
+```
+The /api/balance endpoint returns 500 error
+```
+
+**Claude:**
+The `PlayerInfoHelper.aspx` returns JSON, but the code was trying to parse it as HTML.
+
+**Fix Applied:**
+```javascript
+async getBalance() {
+  const response = await this.client.get('/wager/PlayerInfoHelper.aspx', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+
+  // API returns JSON, not HTML
+  const data = response.data;
+  if (data.result) {
+    return {
+      current: parseInt(data.result.CurrentBalance.replace(/,/g, '').trim()),
+      available: parseInt(data.result.RealAvailBalance.replace(/,/g, '').trim()),
+      atRisk: parseInt(data.result.AmountAtRisk.replace(/,/g, '').trim())
+    };
+  }
+  // Fallback to HTML parsing
+  return this.parseBalanceFromHtml(response.data);
+}
+```
+
+---
+
+## Verified Successful Bets
+
+| Ticket # | Bet Description | Risk | Win | Date |
+|----------|-----------------|------|-----|------|
+| 207810253 | PHI 76ERS +5-110 | $28 | $25 | Feb 3, 2026 |
+| 207810333 | PHI 76ERS +5-110 | $28 | $25 | Feb 3, 2026 |
+| 207810429 | PHI 76ERS +5-110 | $28 | $25 | Feb 3, 2026 |
+| 207810485 | PHI 76ERS +5-110 | $28 | $25 | Feb 3, 2026 |
+| 207811149 | PHI 76ERS +5-110 | $28 | $25 | Feb 3, 2026 |
+
+---
+
 # Summary
 
-**Total Development Time:** ~2 hours
+**Total Development Time:** ~3 hours
 
 **Key Iterations:**
 1. Initial site exploration and architecture discovery
@@ -483,24 +677,38 @@ curl -X POST http://localhost:3001/api/login \
 7. Frontend UI with bet slip and odds calculator
 8. **Bug fix #2:** Odds display used hardcoded data - fixed to use API response
 9. **Bug fix #3:** Added MLB and NHL fallback data for complete league coverage
+10. **Bug fix #4:** `amountType` must be integer `1`, not string `'W'`
+11. **Bug fix #5:** Post endpoint is `PostWagerMultipleHelper.aspx`, not `PostWagerHelper.aspx`
+12. **Bug fix #6:** Password field is `confirmPassword` in post step
+13. **Bug fix #7:** Balance endpoint returns JSON, not HTML
 
 **What Worked Well:**
 - Starting with network inspection before writing code
 - Using `tough-cookie` for ASP.NET session management
 - Mapping Play23 errors to standard HTTP status codes
 - Incremental testing after each component
+- Analyzing minified frontend JS to discover exact parameter formats
+- Systematic parameter variation testing to isolate issues
 
-**Course Corrections:**
+**Critical Course Corrections:**
 - Login failed multiple times until we inspected actual HTML field names
 - Had to switch from assumed field names (`username`) to actual (`Account`)
 - Odds display required fixing both backend parsing and frontend rendering
-- Added missing league data (MLB, NHL) when discovered during testing
+- **amountType discovery:** Took multiple test iterations to find that `'W'` (string) fails but `1` (integer) works
+- **Endpoint discovery:** `PostWagerHelper.aspx` doesn't work; must use `PostWagerMultipleHelper.aspx`
+- **Field name discovery:** `password` doesn't work in post; must use `confirmPassword`
 
 **Technologies Used:**
 - `express` - Web server framework
 - `axios` + `axios-cookiejar-support` - HTTP client with cookie management
 - `tough-cookie` - Cookie jar implementation for ASP.NET sessions
+- `qs` - URL query string encoding (for proper form data serialization)
 - Vanilla JavaScript - Frontend (no framework needed for this scope)
+
+**Final Verification:**
+- 5 successful bets placed via API (Tickets: 207810253, 207810333, 207810429, 207810485, 207811149)
+- All bets confirmed on Play23.ag account
+- Complete flow working: Login → Get Odds → Select Bet → Place Bet → Get Ticket
 
 ---
 
