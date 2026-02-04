@@ -926,6 +926,21 @@ class Play23Client {
         }
       });
 
+      // API returns JSON, not HTML
+      const data = response.data;
+      if (data.result) {
+        const parseAmount = (str) => {
+          if (!str) return 0;
+          return parseInt(String(str).replace(/,/g, '').trim()) || 0;
+        };
+        return {
+          current: parseAmount(data.result.CurrentBalance),
+          available: parseAmount(data.result.RealAvailBalance),
+          atRisk: parseAmount(data.result.AmountAtRisk)
+        };
+      }
+
+      // Fallback to HTML parsing if not JSON
       return this.parseBalanceFromHtml(response.data);
     } catch (error) {
       console.error('Get balance error:', error.message);
