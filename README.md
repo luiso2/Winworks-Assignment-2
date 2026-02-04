@@ -126,12 +126,12 @@ Placing a bet requires THREE sequential POST requests using `application/x-www-f
    ```
    - Validates amount and password
 
-3. **Post:** `POST /wager/PostWagerHelper.aspx`
+3. **Post:** `POST /wager/PostWagerMultipleHelper.aspx`
    ```
-   WT=0&sel=...
+   postWagerRequests=[{"WT":0,"IDWT":966101,"sel":"...","confirmPassword":"123",...}]
    ```
    - Actually places the bet
-   - Returns ticket number
+   - Returns ticket number (e.g., `207810485`)
 
 ---
 
@@ -143,9 +143,36 @@ Placing a bet requires THREE sequential POST requests using `application/x-www-f
 | `/wager/NewScheduleHelper.aspx` | GET | - | Fetch odds (returns JSON) |
 | `/wager/CreateWagerHelper.aspx` | POST | form-urlencoded | Compile wager (validate selection) |
 | `/wager/ConfirmWagerHelper.aspx` | POST | form-urlencoded | Confirm with password & amount |
-| `/wager/PostWagerHelper.aspx` | POST | form-urlencoded | Execute bet (returns ticket) |
+| `/wager/PostWagerMultipleHelper.aspx` | POST | form-urlencoded | Execute bet (returns ticket) |
 | `/wager/PlayerInfoHelper.aspx` | GET | - | Account info |
 | `/Logout.aspx` | GET | - | End session |
+
+### Key API Discoveries (Gotchas)
+
+During reverse-engineering, several non-obvious details were discovered:
+
+1. **`amountType` must be integer `1`, not string `'W'`**
+   - The frontend sends `amountType: 1` (meaning "wager amount")
+   - Sending `'W'` or `'0'` causes "Input string was not in a correct format" error
+
+2. **Post endpoint is `PostWagerMultipleHelper.aspx`, not `PostWagerHelper.aspx`**
+   - The payload is wrapped in `postWagerRequests: JSON.stringify([{...}])`
+   - Password field must be `confirmPassword`, not `password`
+
+3. **`detailData` must include proper `Points` object**
+   ```javascript
+   detailData: [{
+     IdGame: 5421290,
+     Play: 0,
+     Amount: 25,
+     RiskWin: 0,  // Integer, not string
+     Points: { BuyPoints: 0, BuyPointsDesc: '', LineDesc: '', selected: true }
+   }]
+   ```
+
+4. **Selection string format from API**
+   - The API returns pre-built `sel` strings in the odds response
+   - Format: `{play}_{idgm}_{points}_{odds}` (e.g., `0_5421290_5_-110`)
 
 ---
 
@@ -258,6 +285,19 @@ curl -X POST http://localhost:3001/api/login \
   "message": "Welcome back, wwplayer1!"
 }
 ```
+
+---
+
+## Verified Working
+
+Bets successfully placed via the API (February 3, 2026):
+
+| Ticket # | Bet Description | Risk | Win |
+|----------|-----------------|------|-----|
+| 207810253 | [575] PHI 76ERS +5-110 | $28 | $25 |
+| 207810333 | [575] PHI 76ERS +5-110 | $28 | $25 |
+| 207810429 | [575] PHI 76ERS +5-110 | $28 | $25 |
+| 207810485 | [575] PHI 76ERS +5-110 | $28 | $25 |
 
 ---
 

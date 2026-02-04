@@ -756,33 +756,34 @@ class Play23Client {
 
       const wagerCompile = compileData.result.WagerCompile;
       const betDescription = wagerCompile.details?.[0]?.details?.[0]?.Description || 'Unknown bet';
+      const nestedDetail = wagerCompile.details?.[0]?.details?.[0];
+      const IDWT = wagerCompile.details[0]?.IDWT || '';
       console.log('Bet compiled:', betDescription);
 
       // Step 2: Confirm the wager with amount and password
       console.log('Step 2: Confirming wager with amount:', amount);
 
-      // Build detailData - minimal fields, let sel handle the specifics
-      const wagerDetails = wagerCompile.details[0]?.details || [];
-      const detailData = wagerDetails.map(d => ({
-        IdGame: d.IdGame,
-        Play: d.Play,
+      // Build detailData with correct format (discovered by reverse-engineering frontend)
+      const detailData = [{
+        IdGame: nestedDetail.IdGame,
+        Play: nestedDetail.Play,
         Amount: amount,
-        RiskWin: '0'
-      }));
-
-      // Get IDWT from compile response
-      const IDWT = wagerCompile.details[0]?.IDWT || '';
+        RiskWin: 0,  // Must be integer, not string
+        Pitcher: nestedDetail.Pitcher || 0,
+        TeaserPointsPurchased: 0,
+        Points: { BuyPoints: 0, BuyPointsDesc: '', LineDesc: '', selected: true }
+      }];
 
       const confirmPayload = new URLSearchParams({
         WT: wagerType,
         open: 0,
         IDWT: IDWT,
         sel: selection,
-        amountType: 'W', // W = wager amount
-        sameAmount: 'true',
+        amountType: 1,  // KEY: Must be integer (1=wager amount), NOT string 'W'
+        sameAmount: true,
         detailData: JSON.stringify(detailData),
         sameAmountNumber: amount.toString(),
-        useFreePlayAmount: 'false',
+        useFreePlayAmount: false,
         roundRobinCombinations: '0',
         password: password
       }).toString();
@@ -829,15 +830,33 @@ class Play23Client {
         return { success: false, error: errorMsg, errorType: 'CONFIRM_ERROR' };
       }
 
-      // Step 3: Post the wager (final confirmation)
+      // Get confirmed amounts
+      const confirmedRisk = confirmData.result?.details?.[0]?.Risk || amount;
+      const confirmedWin = confirmData.result?.details?.[0]?.Win || Math.round(amount * 0.91);
+
+      // Step 3: Post the wager using PostWagerMultipleHelper.aspx
       console.log('Step 3: Posting wager...');
 
-      const postPayload = new URLSearchParams({
+      // Build postWagerRequest (format discovered by reverse-engineering frontend)
+      const postWagerRequest = {
         WT: wagerType,
-        sel: selection
+        open: 0,
+        IDWT: IDWT,
+        sel: selection,
+        sameAmount: true,
+        amountType: 1,  // Must be integer
+        detailData: JSON.stringify(detailData),
+        confirmPassword: password,  // KEY: Use 'confirmPassword', not 'password'
+        sameAmountNumber: amount.toString(),
+        useFreePlayAmount: false,
+        roundRobinCombinations: '0'
+      };
+
+      const postPayload = new URLSearchParams({
+        postWagerRequests: JSON.stringify([postWagerRequest])
       }).toString();
 
-      const postResponse = await this.client.post('/wager/PostWagerHelper.aspx', postPayload, {
+      const postResponse = await this.client.post('/wager/PostWagerMultipleHelper.aspx', postPayload, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest'
@@ -856,18 +875,21 @@ class Play23Client {
         };
       }
 
-      if (postData.result?.ErrorMessage) {
-        return {
-          success: false,
-          error: postData.result.ErrorMessage,
-          errorType: 'POST_ERROR'
-        };
+      // Extract result from array response
+      const postResult = postData.result?.[0]?.WagerPostResult || postData[0]?.WagerPostResult || postData.result?.WagerPostResult;
+
+      if (postResult?.ErrorMsgKey && postResult.ErrorMsgKey !== '') {
+        const errorKey = postResult.ErrorMsgKey;
+        if (errorKey === 'GAMELINECHANGE') {
+          return { success: false, error: 'Odds have changed', errorType: 'ODDS_CHANGED' };
+        }
+        return { success: false, error: errorKey, errorType: 'POST_ERROR' };
       }
 
       // Extract ticket information
-      const ticketNumber = postData.result?.TicketNumber || postData.result?.ticketNumber || 'Unknown';
-      const risking = postData.result?.Risk || postData.result?.risking || amount;
-      const toWin = postData.result?.Win || postData.result?.toWin || Math.round(amount * 0.91);
+      const ticketNumber = postResult?.details?.[0]?.TicketNumber || 'Unknown';
+      const risking = postResult?.details?.[0]?.Risk || confirmedRisk;
+      const toWin = postResult?.details?.[0]?.Win || confirmedWin;
 
       console.log('Bet placed successfully! Ticket:', ticketNumber);
 

@@ -156,6 +156,11 @@ app.post('/api/bet', async (req, res) => {
     const sessionId = req.headers['x-session-id'];
     const session = sessions.get(sessionId);
 
+    console.log('=== BET REQUEST ===');
+    console.log('Session ID:', sessionId);
+    console.log('Session exists:', !!session);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+
     if (!session) {
       return res.status(401).json({ success: false, error: 'Not authenticated' });
     }
