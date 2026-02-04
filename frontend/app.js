@@ -210,7 +210,15 @@ function renderGames(games) {
 
 // Select a bet
 function selectBet(gameId, team, type, line, odds, rot, btnElement, sel) {
-  // Use the pre-built selection string from API if available, otherwise build it
+  // Use the pre-built selection string from API if available
+  // Log for debugging
+  console.log('selectBet called:', { gameId, team, type, line, odds, sel });
+
+  // Validate sel exists - if not, show warning
+  if (!sel) {
+    console.warn('No sel string provided for bet, this may cause errors');
+  }
+
   const selection = sel || ('0_' + gameId + '_' + line.replace('½', '.5') + '_' + odds);
 
   selectedBet = {
@@ -269,6 +277,13 @@ function clearBetSlip() {
 async function placeBet() {
   if (!selectedBet) {
     showAppStatus('Please select a bet first', 'error');
+    return;
+  }
+
+  // Validate selection string exists and is valid
+  if (!selectedBet.selection || selectedBet.selection === 'undefined' || !selectedBet.selection.includes('_')) {
+    showAppStatus('Invalid bet selection. Please refresh and select again.', 'error');
+    console.error('Invalid selection:', selectedBet.selection);
     return;
   }
 
