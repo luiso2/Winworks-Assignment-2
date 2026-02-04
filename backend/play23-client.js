@@ -147,10 +147,18 @@ class Play23Client {
       atRisk: 0
     };
 
-    // Try to extract balance values
-    const currentMatch = html.match(/Current Balance[:\s]*<[^>]*>?\s*([0-9,]+)/i);
-    const availableMatch = html.match(/Available Balance[:\s]*<[^>]*>?\s*([0-9,]+)/i);
-    const atRiskMatch = html.match(/Amount at Risk[:\s]*<[^>]*>?\s*([0-9,]+)/i);
+    // Try multiple patterns to extract balance values
+    // Pattern 1: class="current-balance">653
+    const currentMatch = html.match(/current-balance[^>]*>([0-9,]+)/i) ||
+                         html.match(/Current Balance[:\s]*<[^>]*>?\s*([0-9,]+)/i);
+
+    // Pattern 2: class="real-avail-balance">100,172
+    const availableMatch = html.match(/avail-balance[^>]*>([0-9,]+)/i) ||
+                           html.match(/Available Balance[:\s]*<[^>]*>?\s*([0-9,]+)/i);
+
+    // Pattern 3: at risk amount
+    const atRiskMatch = html.match(/at-risk[^>]*>([0-9,]+)/i) ||
+                        html.match(/Amount at Risk[:\s]*<[^>]*>?\s*([0-9,]+)/i);
 
     if (currentMatch) balance.current = parseInt(currentMatch[1].replace(/,/g, ''));
     if (availableMatch) balance.available = parseInt(availableMatch[1].replace(/,/g, ''));
@@ -161,16 +169,16 @@ class Play23Client {
 
   /**
    * Get available sports (predefined list based on Play23 structure)
+   * Note: Only includes leagues with active betting lines
    */
   async getSports() {
-    // These are the common league IDs from Play23
+    // These are the leagues currently available on Play23
+    // MLB and NHL removed - not currently available per site inspection
     return [
       { id: 535, name: 'NBA', sport: 'Basketball' },
       { id: 43, name: 'College Basketball', sport: 'Basketball' },
       { id: 4029, name: 'NFL', sport: 'Football' },
       { id: 430, name: 'NFL 1st Half', sport: 'Football' },
-      { id: 1, name: 'MLB', sport: 'Baseball' },
-      { id: 2, name: 'NHL', sport: 'Hockey' },
       { id: 3, name: 'Soccer - Premier League', sport: 'Soccer' },
       { id: 1278, name: 'Soccer - Argentina', sport: 'Soccer' },
       { id: 1566, name: 'Soccer - Costa Rica', sport: 'Soccer' },
@@ -195,16 +203,140 @@ class Play23Client {
           lg: leagueId
         },
         headers: {
-          'Accept': 'text/html, */*',
+          'Accept': 'application/json, text/html, */*',
           'X-Requested-With': 'XMLHttpRequest',
           'Referer': `${BASE_URL}/wager/NewSchedule.aspx`
         }
       });
 
-      return this.parseOddsHtml(response.data, leagueId);
+      // Play23 returns JSON, not HTML
+      return this.parseOddsJson(response.data, leagueId);
     } catch (error) {
       console.error('Get odds error:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Parse odds from JSON response
+   * Play23 API returns structured JSON with game data
+   */
+  parseOddsJson(data, leagueId) {
+    const games = [];
+
+    try {
+      // Parse if string
+      const json = typeof data === 'string' ? JSON.parse(data) : data;
+
+      if (!json.result?.listLeagues?.[0]) {
+        console.log('No leagues data in response');
+        return this.getFallbackGames(leagueId);
+      }
+
+      // Find the GAME LINES section
+      for (const section of json.result.listLeagues[0]) {
+        if (section.Description?.includes('GAME LINES') && section.Games) {
+          for (const game of section.Games) {
+            const line = game.GameLines?.[0];
+            if (!line) continue;
+
+            // Parse spread values (handle HTML entities)
+            const parseSpread = (str, numericValue) => {
+              if (!str) return { line: '0', odds: '-110', display: '0' };
+              // Replace HTML entity first
+              let cleanStr = str.replace(/&frac12;/g, '.5').replace(/½/g, '.5');
+              // Format: "+4.5-108" or "-3-108"
+              const match = cleanStr.match(/([+-]?\d+\.?\d*)([+-]\d+)/);
+              if (match) {
+                // Use numericValue if available (more accurate)
+                const lineValue = numericValue || match[1];
+                return {
+                  line: lineValue.toString(),
+                  display: str.replace('&frac12;', '½'),
+                  odds: match[2]
+                };
+              }
+              return { line: '0', odds: '-110', display: '0' };
+            };
+
+            // Parse total (format: "o222-110" or "u222-110")
+            const parseTotal = (str, numericValue) => {
+              if (!str) return { line: '220', odds: '-110', display: '220' };
+              let cleanStr = str.replace(/&frac12;/g, '.5').replace(/½/g, '.5');
+              const match = cleanStr.match(/[ou]?(\d+\.?\d*)([+-]\d+)/i);
+              if (match) {
+                const lineValue = numericValue || match[1];
+                return {
+                  line: lineValue.toString(),
+                  display: str.replace(/&frac12;/g, '½').replace(/^[ou]/i, ''),
+                  odds: match[2]
+                };
+              }
+              return { line: '220', odds: '-110', display: '220' };
+            };
+
+            // Use numeric values from API when available
+            const vSpread = parseSpread(line.vsprdh, line.vsprdt);
+            const hSpread = parseSpread(line.hsprdh, line.hsprdt);
+            const over = parseTotal(line.ovh, line.unt); // unt is the total number
+            const under = parseTotal(line.unh, line.unt);
+
+            // Format date
+            const dateStr = game.gmdt; // "20260203"
+            const timeStr = game.gmtm; // "22:10:00"
+            const formattedDate = dateStr ?
+              `${dateStr.substring(4,6)}/${dateStr.substring(6,8)}` : 'Today';
+            const formattedTime = timeStr ?
+              timeStr.substring(0, 5) : 'TBD';
+
+            games.push({
+              id: game.idgm.toString(),
+              idgp: game.idgp,
+              date: formattedDate,
+              time: formattedTime,
+              team1: { name: game.vtm, rot: game.vnum.toString() },
+              team2: { name: game.htm, rot: game.hnum.toString() },
+              // Spread data with selection format
+              spread1: vSpread.display || vSpread.line,
+              spreadOdds1: vSpread.odds,
+              spread1Value: vSpread.line,
+              spread2: hSpread.display || hSpread.line,
+              spreadOdds2: hSpread.odds,
+              spread2Value: hSpread.line,
+              // Total data
+              total: over.display || over.line,
+              totalValue: over.line,
+              totalOver: over.odds,
+              totalUnder: under.odds,
+              // Moneyline
+              ml1: line.voddsh || '+100',
+              ml2: line.hoddsh || '-100',
+              // Selection strings for bet placement (format: play_idgm_points_odds)
+              sel: {
+                spread1: `0_${game.idgm}_${vSpread.line}_${vSpread.odds}`,
+                spread2: `1_${game.idgm}_${hSpread.line}_${hSpread.odds}`,
+                over: `0_${game.idgm}_${over.line}_${over.odds}`,
+                under: `1_${game.idgm}_${under.line}_${under.odds}`,
+                ml1: `0_${game.idgm}_0_${line.voddsh || '+100'}`,
+                ml2: `1_${game.idgm}_0_${line.hoddsh || '-100'}`
+              }
+            });
+          }
+          break; // Only process GAME LINES section
+        }
+      }
+
+      if (games.length === 0) {
+        console.log('No games found in JSON, using fallback');
+        return this.getFallbackGames(leagueId);
+      }
+
+      console.log(`Parsed ${games.length} games from Play23 JSON API`);
+      return { leagueId, games, source: 'live' };
+
+    } catch (error) {
+      console.error('Error parsing odds JSON:', error.message);
+      return this.getFallbackGames(leagueId);
     }
   }
 
@@ -496,19 +628,21 @@ class Play23Client {
     ];
 
     let games;
+    let message = null;
+
     if (leagueId == 4029) {
       games = nflGames;
     } else if (leagueId == 43) {
       games = collegeGames;
-    } else if (leagueId == 1) {
-      games = mlbGames;
-    } else if (leagueId == 2) {
-      games = nhlGames;
+    } else if (leagueId == 1 || leagueId == 2) {
+      // MLB and NHL - not currently available on Play23
+      games = [];
+      message = 'No games currently available for this league';
     } else {
       games = nbaGames;
     }
 
-    return { leagueId, games, source: 'fallback' };
+    return { leagueId, games, source: 'fallback', message };
   }
 
   /**
@@ -543,12 +677,12 @@ class Play23Client {
   }
 
   /**
-   * Place a bet
+   * Place a bet using Play23's JSON API
    * @param {object} betDetails
-   * @param {string} betDetails.selection - Format: "0_gameId_spread_odds"
+   * @param {string} betDetails.selection - Format: "play_gameId_points_odds" (e.g., "0_5421290_4.5_-108")
    * @param {number} betDetails.amount
    * @param {string} betDetails.password
-   * @param {number} betDetails.wagerType
+   * @param {number} betDetails.wagerType - 0=straight, 1=parlay, 2=teaser
    * @param {number} betDetails.leagueId
    */
   async placeBet({ selection, amount, password, wagerType = 0, leagueId = 535 }) {
@@ -557,150 +691,165 @@ class Play23Client {
     }
 
     try {
-      // Step 1: Load the CreateWager page to set up session state
-      const createWagerUrl = `/wager/CreateWager.aspx?sel=${selection}&WT=${wagerType}&lg=${leagueId}`;
-      console.log('Loading bet slip page:', createWagerUrl);
+      // Step 1: Compile the wager (validate selection and get bet details)
+      console.log('Step 1: Compiling wager with selection:', selection);
 
-      const createPageResponse = await this.client.get(createWagerUrl);
-      const pageData = createPageResponse.data;
+      const compilePayload = new URLSearchParams({
+        open: 0,
+        WT: wagerType,
+        sel: selection
+      }).toString();
 
-      // Extract ASP.NET form tokens
-      const viewStateMatch = pageData.match(/id="__VIEWSTATE"\s+value="([^"]+)"/);
-      const viewStateGenMatch = pageData.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/);
-      const eventValidationMatch = pageData.match(/id="__EVENTVALIDATION"\s+value="([^"]+)"/);
-
-      if (!viewStateMatch) {
-        console.log('Warning: Could not extract __VIEWSTATE');
-      }
-
-      // Step 2: Submit the bet amount through the page form
-      // Looking for the amount input and continue button
-      const formData = new URLSearchParams();
-      if (viewStateMatch) formData.append('__VIEWSTATE', viewStateMatch[1]);
-      if (viewStateGenMatch) formData.append('__VIEWSTATEGENERATOR', viewStateGenMatch[1]);
-      if (eventValidationMatch) formData.append('__EVENTVALIDATION', eventValidationMatch[1]);
-
-      // Find the actual input field names from the page
-      const amountFieldMatch = pageData.match(/name="([^"]*(?:amount|Amount|txtAmount)[^"]*)"/i);
-      const amountField = amountFieldMatch ? amountFieldMatch[1] : 'ctl00$MainContent$txtAmount';
-
-      formData.append(amountField, amount.toString());
-      formData.append('ctl00$MainContent$ddlAmountType', 'W'); // W=Wager amount
-      formData.append('ctl00$MainContent$chkSame', 'on');
-      formData.append('ctl00$MainContent$btnContinue', 'Continue');
-
-      console.log('Submitting bet amount:', amount);
-
-      const submitResponse = await this.client.post(createWagerUrl, formData.toString(), {
+      const compileResponse = await this.client.post('/wager/CreateWagerHelper.aspx', compilePayload, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Origin': BASE_URL,
-          'Referer': `${BASE_URL}${createWagerUrl}`
-        },
-        maxRedirects: 5
+          'X-Requested-With': 'XMLHttpRequest'
+        }
       });
 
-      const submitData = submitResponse.data;
+      const compileData = compileResponse.data;
 
-      // Check for validation errors
-      if (submitData.includes('Min Wager') || submitData.includes('minimum')) {
+      if (compileData.result?.ErrorMessage) {
         return {
           success: false,
-          error: 'Minimum bet amount not reached. Minimum is $25.',
-          errorType: 'MIN_BET_NOT_MET'
+          error: compileData.result.ErrorMessage,
+          errorType: 'COMPILE_ERROR'
         };
       }
 
-      if (submitData.includes('Insufficient') || submitData.includes('balance')) {
+      if (!compileData.result?.WagerCompile) {
         return {
           success: false,
-          error: 'Insufficient balance',
-          errorType: 'INSUFFICIENT_BALANCE'
+          error: 'Could not compile wager - invalid selection',
+          errorType: 'COMPILE_ERROR'
         };
       }
 
-      // Check if we got to confirmation page (asks for password)
-      if (submitData.includes('password') || submitData.includes('Please Confirm')) {
-        console.log('Got to confirmation page, submitting password...');
+      const wagerCompile = compileData.result.WagerCompile;
+      const betDescription = wagerCompile.details?.[0]?.details?.[0]?.Description || 'Unknown bet';
+      console.log('Bet compiled:', betDescription);
 
-        // Extract new form tokens
-        const confirmViewState = submitData.match(/id="__VIEWSTATE"\s+value="([^"]+)"/);
-        const confirmViewStateGen = submitData.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/);
-        const confirmEventVal = submitData.match(/id="__EVENTVALIDATION"\s+value="([^"]+)"/);
+      // Step 2: Confirm the wager with amount and password
+      console.log('Step 2: Confirming wager with amount:', amount);
 
-        // Find password field name
-        const pwdFieldMatch = submitData.match(/name="([^"]*(?:password|Password|txtPassword)[^"]*)"/i);
-        const pwdField = pwdFieldMatch ? pwdFieldMatch[1] : 'ctl00$MainContent$txtPassword';
+      // Build detailData - minimal fields, let sel handle the specifics
+      const wagerDetails = wagerCompile.details[0]?.details || [];
+      const detailData = wagerDetails.map(d => ({
+        IdGame: d.IdGame,
+        Play: d.Play,
+        Amount: amount,
+        RiskWin: '0'
+      }));
 
-        const confirmForm = new URLSearchParams();
-        if (confirmViewState) confirmForm.append('__VIEWSTATE', confirmViewState[1]);
-        if (confirmViewStateGen) confirmForm.append('__VIEWSTATEGENERATOR', confirmViewStateGen[1]);
-        if (confirmEventVal) confirmForm.append('__EVENTVALIDATION', confirmEventVal[1]);
-        confirmForm.append(pwdField, password);
-        confirmForm.append('ctl00$MainContent$btnConfirm', 'Confirm Wager');
+      // Get IDWT from compile response
+      const IDWT = wagerCompile.details[0]?.IDWT || '';
 
-        const confirmResponse = await this.client.post(createWagerUrl, confirmForm.toString(), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': BASE_URL,
-            'Referer': `${BASE_URL}${createWagerUrl}`
-          },
-          maxRedirects: 5
-        });
+      const confirmPayload = new URLSearchParams({
+        WT: wagerType,
+        open: 0,
+        IDWT: IDWT,
+        sel: selection,
+        amountType: 'W', // W = wager amount
+        sameAmount: 'true',
+        detailData: JSON.stringify(detailData),
+        sameAmountNumber: amount.toString(),
+        useFreePlayAmount: 'false',
+        roundRobinCombinations: '0',
+        password: password
+      }).toString();
 
-        const confirmData = confirmResponse.data;
-
-        // Check for password error
-        if (confirmData.includes('Invalid') || confirmData.includes('incorrect')) {
-          return {
-            success: false,
-            error: 'Invalid password',
-            errorType: 'INVALID_PASSWORD'
-          };
+      const confirmResponse = await this.client.post('/wager/ConfirmWagerHelper.aspx', confirmPayload, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
         }
+      });
 
-        // Check for success
-        if (confirmData.includes('Confirmed') || confirmData.includes('Ticket')) {
-          const ticketMatch = confirmData.match(/(\d{9,})/);
-          const riskMatch = confirmData.match(/(\d+)\s*\/\s*(\d+)/);
+      const confirmData = confirmResponse.data;
+      console.log('Confirm response:', JSON.stringify(confirmData).substring(0, 300));
 
-          return {
-            success: true,
-            ticketNumber: ticketMatch ? ticketMatch[1] : 'Unknown',
-            risking: riskMatch ? parseInt(riskMatch[1]) : Math.round(amount * 1.15),
-            toWin: riskMatch ? parseInt(riskMatch[2]) : amount
-          };
-        }
-
-        // Check for odds changed
-        if (confirmData.includes('odds') || confirmData.includes('changed') || confirmData.includes('line')) {
-          return {
-            success: false,
-            error: 'Odds have changed. Please try again.',
-            errorType: 'ODDS_CHANGED'
-          };
-        }
-
-        // Check for market closed
-        if (confirmData.includes('closed') || confirmData.includes('unavailable')) {
-          return {
-            success: false,
-            error: 'Market is closed',
-            errorType: 'MARKET_CLOSED'
-          };
-        }
-
-        console.log('Confirm response snippet:', confirmData.substring(0, 500));
+      // Check if session expired (redirected to login page)
+      if (typeof confirmData === 'string' && confirmData.includes('Login')) {
+        return {
+          success: false,
+          error: 'Session expired. Please login again.',
+          errorType: 'SESSION_EXPIRED'
+        };
       }
 
-      // If we didn't get to confirmation, check what error we got
-      console.log('Submit response snippet:', submitData.substring(0, 500));
+      if (confirmData.result?.ErrorMessage) {
+        const errorMsg = confirmData.result.ErrorMessage;
+
+        // Map common errors
+        if (errorMsg.toLowerCase().includes('password')) {
+          return { success: false, error: 'Invalid password', errorType: 'INVALID_PASSWORD' };
+        }
+        if (errorMsg.toLowerCase().includes('balance') || errorMsg.toLowerCase().includes('insufficient')) {
+          return { success: false, error: 'Insufficient balance', errorType: 'INSUFFICIENT_BALANCE' };
+        }
+        if (errorMsg.toLowerCase().includes('minimum')) {
+          return { success: false, error: 'Minimum bet is $25', errorType: 'MIN_BET_NOT_MET' };
+        }
+        if (errorMsg.toLowerCase().includes('odds') || errorMsg.toLowerCase().includes('changed')) {
+          return { success: false, error: 'Odds have changed', errorType: 'ODDS_CHANGED' };
+        }
+        if (errorMsg.toLowerCase().includes('closed') || errorMsg.toLowerCase().includes('unavailable')) {
+          return { success: false, error: 'Market is closed', errorType: 'MARKET_CLOSED' };
+        }
+
+        return { success: false, error: errorMsg, errorType: 'CONFIRM_ERROR' };
+      }
+
+      // Step 3: Post the wager (final confirmation)
+      console.log('Step 3: Posting wager...');
+
+      const postPayload = new URLSearchParams({
+        WT: wagerType,
+        sel: selection
+      }).toString();
+
+      const postResponse = await this.client.post('/wager/PostWagerHelper.aspx', postPayload, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const postData = postResponse.data;
+      console.log('Post response:', JSON.stringify(postData).substring(0, 300));
+
+      // Check if session expired
+      if (typeof postData === 'string' && postData.includes('Login')) {
+        return {
+          success: false,
+          error: 'Session expired. Please login again.',
+          errorType: 'SESSION_EXPIRED'
+        };
+      }
+
+      if (postData.result?.ErrorMessage) {
+        return {
+          success: false,
+          error: postData.result.ErrorMessage,
+          errorType: 'POST_ERROR'
+        };
+      }
+
+      // Extract ticket information
+      const ticketNumber = postData.result?.TicketNumber || postData.result?.ticketNumber || 'Unknown';
+      const risking = postData.result?.Risk || postData.result?.risking || amount;
+      const toWin = postData.result?.Win || postData.result?.toWin || Math.round(amount * 0.91);
+
+      console.log('Bet placed successfully! Ticket:', ticketNumber);
 
       return {
-        success: false,
-        error: 'Could not complete bet placement - check game availability',
-        errorType: 'UNKNOWN'
+        success: true,
+        ticketNumber: ticketNumber.toString(),
+        risking: risking,
+        toWin: toWin,
+        description: betDescription
       };
+
     } catch (error) {
       console.error('Place bet error:', error.message);
       return {

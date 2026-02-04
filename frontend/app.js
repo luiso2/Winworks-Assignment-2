@@ -172,14 +172,14 @@ function renderGames(games) {
     const oddsDiv = document.createElement('div');
     oddsDiv.className = 'game-odds';
 
-    // Create odds buttons
+    // Create odds buttons with proper selection strings
     const oddsButtons = [
-      { team: game.team1.name, type: 'spread', line: game.spread1, odds: game.spreadOdds1, rot: game.team1.rot, label: 'Spread' },
-      { team: 'OVER', type: 'total', line: 'o' + game.total, odds: game.totalOver, rot: game.team1.rot, label: 'Total' },
-      { team: game.team1.name, type: 'ml', line: game.ml1, odds: '', rot: game.team1.rot, label: 'ML' },
-      { team: game.team2.name, type: 'spread', line: game.spread2, odds: game.spreadOdds2, rot: game.team2.rot, label: 'Spread' },
-      { team: 'UNDER', type: 'total', line: 'u' + game.total, odds: game.totalUnder, rot: game.team2.rot, label: 'Total' },
-      { team: game.team2.name, type: 'ml', line: game.ml2, odds: '', rot: game.team2.rot, label: 'ML' }
+      { team: game.team1.name, type: 'spread', line: game.spread1, odds: game.spreadOdds1, rot: game.team1.rot, label: 'Spread', sel: game.sel?.spread1 },
+      { team: 'OVER', type: 'total', line: 'o' + game.total, odds: game.totalOver, rot: game.team1.rot, label: 'Total', sel: game.sel?.over },
+      { team: game.team1.name, type: 'ml', line: game.ml1, odds: game.ml1, rot: game.team1.rot, label: 'ML', sel: game.sel?.ml1 },
+      { team: game.team2.name, type: 'spread', line: game.spread2, odds: game.spreadOdds2, rot: game.team2.rot, label: 'Spread', sel: game.sel?.spread2 },
+      { team: 'UNDER', type: 'total', line: 'u' + game.total, odds: game.totalUnder, rot: game.team2.rot, label: 'Total', sel: game.sel?.under },
+      { team: game.team2.name, type: 'ml', line: game.ml2, odds: game.ml2, rot: game.team2.rot, label: 'ML', sel: game.sel?.ml2 }
     ];
 
     oddsButtons.forEach(btn => {
@@ -196,7 +196,7 @@ function renderGames(games) {
       oddsBtn.appendChild(oddsText);
 
       oddsBtn.addEventListener('click', () => {
-        selectBet(game.id, btn.team, btn.type, btn.line, btn.odds || btn.line, btn.rot, oddsBtn);
+        selectBet(game.id, btn.team, btn.type, btn.line, btn.odds || btn.line, btn.rot, oddsBtn, btn.sel);
       });
 
       oddsDiv.appendChild(oddsBtn);
@@ -209,7 +209,10 @@ function renderGames(games) {
 }
 
 // Select a bet
-function selectBet(gameId, team, type, line, odds, rot, btnElement) {
+function selectBet(gameId, team, type, line, odds, rot, btnElement, sel) {
+  // Use the pre-built selection string from API if available, otherwise build it
+  const selection = sel || ('0_' + gameId + '_' + line.replace('½', '.5') + '_' + odds);
+
   selectedBet = {
     gameId,
     team,
@@ -217,7 +220,7 @@ function selectBet(gameId, team, type, line, odds, rot, btnElement) {
     line,
     odds: odds,
     rot,
-    selection: '0_' + gameId + '_' + line.replace('½', '.5') + '_' + odds
+    selection: selection
   };
 
   // Update UI

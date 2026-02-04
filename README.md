@@ -66,36 +66,70 @@ After login, I navigated to the sportsbook and watched network requests:
 GET /wager/NewScheduleHelper.aspx?WT=0&lg=535
 ```
 
+**Key Discovery:** The API returns **JSON**, not HTML! Structure:
+```json
+{
+  "result": {
+    "listLeagues": [[
+      {
+        "Description": "NBA - GAME LINES",
+        "Games": [{
+          "idgm": 5421290,
+          "vtm": "PHI 76ERS",
+          "htm": "GS WARRIORS",
+          "vnum": 575,
+          "hnum": 576,
+          "GameLines": [{
+            "vsprdh": "+4½-108",
+            "hsprdh": "-4½-112",
+            "ovh": "o222-110",
+            "voddsh": "+150",
+            "hoddsh": "-180"
+          }]
+        }]
+      }
+    ]]
+  }
+}
+```
+
 Parameters discovered:
 - `WT` = Wager Type (0=straight, 1=parlay, 2=teaser)
 - `lg` = League ID (535=NBA, 43=CBB, 4029=NFL)
 
 ### Step 3: Bet Selection Format
 
-Clicking on a bet line revealed the selection encoding:
+By analyzing the minified React frontend (3.8MB), I discovered the selection encoding:
 
 ```
-/wager/CreateWager.aspx?sel=0_5421295_-7.5_-115&WT=0&lg=535
-                            │  │       │     │
-                            │  │       │     └── Odds
-                            │  │       └── Spread/Line
-                            │  └── Game ID
-                            └── Selection Type
+sel=0_5421290_4.5_-108
+    │  │       │    │
+    │  │       │    └── Odds
+    │  │       └── Points/Spread value
+    │  └── Game ID (idgm)
+    └── Play (0=visitor, 1=home)
 ```
 
-### Step 4: Bet Placement Flow
+### Step 4: Bet Placement Flow (JSON API)
 
-Placing a bet requires THREE sequential POST requests:
+Placing a bet requires THREE sequential POST requests using `application/x-www-form-urlencoded`:
 
-1. **Validate:** `POST /wager/CreateWagerHelper.aspx`
-   - Sends stake amount
-   - Returns bet details (risking/to-win)
+1. **Compile:** `POST /wager/CreateWagerHelper.aspx`
+   ```
+   open=0&WT=0&sel=0_5421290_4.5_-108
+   ```
+   - Returns `WagerCompile` with bet details and IDWT
 
 2. **Confirm:** `POST /wager/ConfirmWagerHelper.aspx`
-   - Sends password confirmation
-   - Validates user authorization
+   ```
+   WT=0&IDWT=966101&sel=...&detailData=[...]&password=123&amount=25
+   ```
+   - Validates amount and password
 
-3. **Execute:** `POST /wager/PostWagerMultipleHelper.aspx`
+3. **Post:** `POST /wager/PostWagerHelper.aspx`
+   ```
+   WT=0&sel=...
+   ```
    - Actually places the bet
    - Returns ticket number
 
@@ -103,15 +137,15 @@ Placing a bet requires THREE sequential POST requests:
 
 ## API Endpoints Reference
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/Login.aspx` | POST | Authentication (form) |
-| `/wager/NewScheduleHelper.aspx` | GET | Fetch odds |
-| `/wager/CreateWagerHelper.aspx` | POST | Validate bet |
-| `/wager/ConfirmWagerHelper.aspx` | POST | Confirm with password |
-| `/wager/PostWagerMultipleHelper.aspx` | POST | Execute bet |
-| `/wager/PlayerInfoHelper.aspx` | GET | Account info |
-| `/Logout.aspx` | GET | End session |
+| Endpoint | Method | Content-Type | Purpose |
+|----------|--------|--------------|---------|
+| `/Login.aspx` | POST | form-urlencoded | Authentication with ViewState tokens |
+| `/wager/NewScheduleHelper.aspx` | GET | - | Fetch odds (returns JSON) |
+| `/wager/CreateWagerHelper.aspx` | POST | form-urlencoded | Compile wager (validate selection) |
+| `/wager/ConfirmWagerHelper.aspx` | POST | form-urlencoded | Confirm with password & amount |
+| `/wager/PostWagerHelper.aspx` | POST | form-urlencoded | Execute bet (returns ticket) |
+| `/wager/PlayerInfoHelper.aspx` | GET | - | Account info |
+| `/Logout.aspx` | GET | - | End session |
 
 ---
 
@@ -142,23 +176,26 @@ winworks-assignment-2/
 ### Part 1: Bet Finder (Frontend)
 - ✅ Login with Play23 credentials
 - ✅ Browse available games by league (NBA, NFL, College BB)
-- ✅ Live odds fetched from Play23 API (with fallback data)
+- ✅ **Live odds from Play23 JSON API** (with fallback data)
 - ✅ View spread, total, and moneyline odds
 - ✅ Select bet and specify stake amount
 - ✅ Real-time payout calculation (American odds)
 - ✅ Place bet button with password confirmation
+- ✅ Pre-built selection strings for accurate bet placement
 
 ### Part 2: Bet Placer (Backend)
-- ✅ Direct API communication (no browser automation)
+- ✅ Direct JSON API communication (no browser automation)
 - ✅ Cookie-based session management
 - ✅ ASP.NET ViewState token handling
-- ✅ Three-step bet placement flow
+- ✅ **Three-step bet placement flow** (Compile → Confirm → Post)
+- ✅ Session expiration detection
 - ✅ Error handling:
   - Odds changed (409)
   - Insufficient balance (402)
   - Market closed (410)
   - Minimum bet not met (400)
   - Invalid password (401)
+  - Session expired (401)
 
 ---
 
@@ -176,13 +213,13 @@ winworks-assignment-2/
 
 ## Limitations
 
-1. **Odds Display:** Attempts to parse live odds from Play23 HTML responses. Falls back to league-specific sample data if parsing fails (Play23's HTML structure can vary).
+1. **Odds Parsing:** Uses Play23's JSON API. Falls back to sample data if the API response format changes.
 
-2. **Session Timeout:** Basic handling—production would need automatic re-authentication.
+2. **Session Timeout:** Detects expired sessions and prompts re-login. Production would benefit from automatic refresh.
 
-3. **Real-time Updates:** Odds are fetched on page load and league change, not continuously live-updated.
+3. **Real-time Updates:** Odds fetched on page load and league change—not WebSocket live updates.
 
-4. **League Support:** NBA, NFL, and College Basketball have dedicated fallback data. Other leagues may show empty if live parsing fails.
+4. **League Support:** NBA, NFL, and College Basketball have dedicated fallback data. Other leagues depend on live API.
 
 ---
 
