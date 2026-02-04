@@ -260,12 +260,14 @@ class Play23Client {
             };
 
             // Parse total (format: "o222-110" or "u222-110")
+            // numericValue comes from ovt (negative for over) or unt (positive for under)
             const parseTotal = (str, numericValue) => {
               if (!str) return { line: '220', odds: '-110', display: '220' };
               let cleanStr = str.replace(/&frac12;/g, '.5').replace(/½/g, '.5');
               const match = cleanStr.match(/[ou]?(\d+\.?\d*)([+-]\d+)/i);
               if (match) {
-                const lineValue = numericValue || match[1];
+                // Use numericValue directly (includes sign for over/under distinction)
+                const lineValue = numericValue !== undefined ? numericValue : match[1];
                 return {
                   line: lineValue.toString(),
                   display: str.replace(/&frac12;/g, '½').replace(/^[ou]/i, ''),
@@ -278,8 +280,10 @@ class Play23Client {
             // Use numeric values from API when available
             const vSpread = parseSpread(line.vsprdh, line.vsprdt);
             const hSpread = parseSpread(line.hsprdh, line.hsprdt);
-            const over = parseTotal(line.ovh, line.unt); // unt is the total number
-            const under = parseTotal(line.unh, line.unt);
+            // IMPORTANT: ovt is NEGATIVE for over, unt is POSITIVE for under
+            // This is required for correct bet placement
+            const over = parseTotal(line.ovh, line.ovt); // ovt is negative (e.g., -231.5)
+            const under = parseTotal(line.unh, line.unt); // unt is positive (e.g., 231.5)
 
             // Format date - ensure values are strings before using substring
             const dateStr = game.gmdt ? String(game.gmdt) : null; // "20260203"
@@ -309,16 +313,17 @@ class Play23Client {
               totalOver: over.odds,
               totalUnder: under.odds,
               // Moneyline
-              ml1: line.voddsh || '+100',
-              ml2: line.hoddsh || '-100',
-              // Selection strings for bet placement (format: play_idgm_points_odds)
+              ml1: line.voddsh || '',
+              ml2: line.hoddsh || '',
+              // Selection strings for bet placement
+              // Play codes: 0=spread visitor, 1=spread home, 2=over, 3=under, 4=ML visitor, 5=ML home
               sel: {
                 spread1: `0_${game.idgm}_${vSpread.line}_${vSpread.odds}`,
                 spread2: `1_${game.idgm}_${hSpread.line}_${hSpread.odds}`,
-                over: `0_${game.idgm}_${over.line}_${over.odds}`,
-                under: `1_${game.idgm}_${under.line}_${under.odds}`,
-                ml1: `0_${game.idgm}_0_${line.voddsh || '+100'}`,
-                ml2: `1_${game.idgm}_0_${line.hoddsh || '-100'}`
+                over: `2_${game.idgm}_${over.line}_${over.odds}`,
+                under: `3_${game.idgm}_${under.line}_${under.odds}`,
+                ml1: line.voddsh ? `4_${game.idgm}_0_${line.voddsh}` : '',
+                ml2: line.hoddsh ? `5_${game.idgm}_0_${line.hoddsh}` : ''
               }
             });
           }

@@ -102,13 +102,26 @@ Parameters discovered:
 By analyzing the minified React frontend (3.8MB), I discovered the selection encoding:
 
 ```
-sel=0_5421290_4.5_-108
-    │  │       │    │
-    │  │       │    └── Odds
-    │  │       └── Points/Spread value
-    │  └── Game ID (idgm)
-    └── Play (0=visitor, 1=home)
+sel={play}_{gameId}_{points}_{odds}
+
+Play codes:
+  0 = Spread (Visitor)
+  1 = Spread (Home)
+  2 = Total Over    ← Points must be NEGATIVE (e.g., -231.5)
+  3 = Total Under   ← Points must be POSITIVE (e.g., 231.5)
+  4 = Moneyline (Visitor)
+  5 = Moneyline (Home)
+
+Examples:
+  0_5421290_4.5_-108     → Visitor spread +4.5 at -108
+  2_5421290_-231.5_-110  → Over 231.5 at -110 (note: negative points)
+  3_5421290_231.5_-110   → Under 231.5 at -110 (note: positive points)
+  4_5421290_0_+150       → Visitor moneyline at +150
 ```
+
+**Critical Discovery:** The Over/Under selection requires specific point signs:
+- Over uses `ovt` field (NEGATIVE value, e.g., `-231.5`)
+- Under uses `unt` field (POSITIVE value, e.g., `231.5`)
 
 ### Step 4: Bet Placement Flow (JSON API)
 
@@ -170,9 +183,10 @@ During reverse-engineering, several non-obvious details were discovered:
    }]
    ```
 
-4. **Selection string format from API**
-   - The API returns pre-built `sel` strings in the odds response
-   - Format: `{play}_{idgm}_{points}_{odds}` (e.g., `0_5421290_5_-110`)
+4. **Selection string format varies by bet type**
+   - Spreads: `{0|1}_{idgm}_{points}_{odds}`
+   - Totals: Over uses NEGATIVE points (`2_id_-231.5_-110`), Under uses POSITIVE (`3_id_231.5_-110`)
+   - Moneylines: `{4|5}_{idgm}_0_{odds}`
 
 ---
 
@@ -184,7 +198,9 @@ winworks-assignment-2/
 │   ├── server.js           # Express API server
 │   ├── play23-client.js    # Play23 HTTP client
 │   ├── package.json        # Dependencies
-│   └── .env.example        # Environment template
+│   ├── jest.config.js      # Test configuration
+│   └── tests/
+│       └── e2e.test.js     # End-to-end tests
 ├── frontend/
 │   ├── index.html          # Main UI
 │   └── app.js              # Frontend logic
@@ -193,6 +209,7 @@ winworks-assignment-2/
 │   └── 02-implementation-build.md
 ├── README.md               # This file
 ├── REFLECTION.md           # Project reflection
+├── BUG_FIX_REPORT.md       # Documentation of the totals/ML bug fix
 └── .gitignore
 ```
 
@@ -269,6 +286,60 @@ Install with: `npm install`
 
 ## Testing
 
+### Automated E2E Tests (Recommended)
+
+Run the full test suite to verify all bet types work correctly:
+
+```bash
+cd backend
+npm test
+```
+
+**Test Coverage:**
+- Authentication (login/logout)
+- Odds retrieval and parsing
+- Spread bets (visitor & home)
+- Total Over bets
+- Total Under bets
+- Moneyline bets (visitor & home)
+- Error handling (wrong password, minimum bet)
+
+**Expected Output:**
+```
+PASS tests/e2e.test.js
+  Play23 E2E Tests
+    Authentication
+      √ should login successfully with valid credentials
+      √ should fail login with invalid credentials
+    Odds Retrieval
+      √ should fetch NBA odds successfully
+      √ should include selection strings in odds response
+      √ should format selection strings correctly
+    Bet Placement
+      Spread Bets
+        √ should place SPREAD bet on VISITOR team
+        √ should place SPREAD bet on HOME team
+      Total Bets (Over/Under)
+        √ should place TOTAL OVER bet
+        √ should place TOTAL UNDER bet
+      Moneyline Bets
+        √ should place MONEYLINE bet on VISITOR team
+        √ should place MONEYLINE bet on HOME team
+    Error Handling
+      √ should reject bet with wrong password
+      √ should reject bet below minimum amount
+      √ should handle invalid selection string
+    Account Operations
+      √ should retrieve account balance
+
+Test Suites: 1 passed, 1 total
+Tests:       15 passed, 15 total
+```
+
+**Note:** Tests place REAL bets ($25 minimum each) on the test account.
+
+### Manual API Testing
+
 ```bash
 # Health check
 curl http://localhost:3001/api/health
@@ -290,14 +361,32 @@ curl -X POST http://localhost:3001/api/login \
 
 ## Verified Working
 
-Bets successfully placed via the API (February 3, 2026):
+All bet types successfully tested (February 4, 2026):
 
-| Ticket # | Bet Description | Risk | Win |
-|----------|-----------------|------|-----|
-| 207810253 | [575] PHI 76ERS +5-110 | $28 | $25 |
-| 207810333 | [575] PHI 76ERS +5-110 | $28 | $25 |
-| 207810429 | [575] PHI 76ERS +5-110 | $28 | $25 |
-| 207810485 | [575] PHI 76ERS +5-110 | $28 | $25 |
+| Bet Type | Ticket # | Description | Result |
+|----------|----------|-------------|--------|
+| Spread (Visitor) | 207833150 | MEM GRIZZLIES +1-115 | ✅ SUCCESS |
+| Spread (Home) | 207833151 | SAC KINGS -1-105 | ✅ SUCCESS |
+| **Total Over** | 207833152 | TOTAL o231½-110 | ✅ SUCCESS |
+| **Total Under** | 207833153 | TOTAL u231½-110 | ✅ SUCCESS |
+| Moneyline (Visitor) | 207833154 | CLE CAVALIERS -133 | ✅ SUCCESS |
+| Moneyline (Home) | 207833155 | LA CLIPPERS +113 | ✅ SUCCESS |
+
+---
+
+## Bug Fix History
+
+### February 4, 2026 - Total/Moneyline "Odds Changed" Error
+
+**Problem:** Totals (Over/Under) and Moneylines returned "GAMELINECHANGE" error even with correct odds.
+
+**Root Cause:** Selection string for Over bets used positive points instead of negative.
+
+**Solution:**
+- Over bets now use `ovt` field (negative, e.g., `-231.5`)
+- Under bets use `unt` field (positive, e.g., `231.5`)
+
+See [BUG_FIX_REPORT.md](BUG_FIX_REPORT.md) for full details.
 
 ---
 
