@@ -760,6 +760,16 @@ class Play23Client {
       const IDWT = wagerCompile.details[0]?.IDWT || '';
       console.log('Bet compiled:', betDescription);
 
+      // Validate nestedDetail exists
+      if (!nestedDetail || !nestedDetail.IdGame) {
+        console.log('Invalid compile response structure:', JSON.stringify(wagerCompile.details?.[0], null, 2).substring(0, 500));
+        return {
+          success: false,
+          error: 'Invalid bet selection - please refresh odds and try again',
+          errorType: 'INVALID_SELECTION'
+        };
+      }
+
       // Step 2: Confirm the wager with amount and password
       console.log('Step 2: Confirming wager with amount:', amount);
 
