@@ -465,6 +465,29 @@ class Play23Client {
   }
 
   /**
+   * Generate selection strings for a game
+   */
+  generateSelStrings(game) {
+    const parseSpreadValue = (spread) => {
+      if (!spread) return '0';
+      return spread.replace('½', '.5').replace('+', '').replace('-', '-');
+    };
+
+    const spread1Value = parseSpreadValue(game.spread1);
+    const spread2Value = parseSpreadValue(game.spread2);
+    const totalValue = game.total?.replace('½', '.5') || '220';
+
+    return {
+      spread1: `0_${game.id}_${spread1Value}_${game.spreadOdds1}`,
+      spread2: `1_${game.id}_${spread2Value}_${game.spreadOdds2}`,
+      over: `0_${game.id}_${totalValue}_${game.totalOver}`,
+      under: `1_${game.id}_${totalValue}_${game.totalUnder}`,
+      ml1: `0_${game.id}_0_${game.ml1}`,
+      ml2: `1_${game.id}_0_${game.ml2}`
+    };
+  }
+
+  /**
    * Fallback games when live parsing fails
    */
   getFallbackGames(leagueId) {
@@ -476,9 +499,9 @@ class Play23Client {
         time: '7:40 PM',
         team1: { name: 'LA LAKERS', rot: '565' },
         team2: { name: 'BRK NETS', rot: '566' },
-        spread1: '-7½', spreadOdds1: '-115',
-        spread2: '+7½', spreadOdds2: '-105',
-        total: '221½', totalOver: '-110', totalUnder: '-110',
+        spread1: '-7.5', spreadOdds1: '-115',
+        spread2: '+7.5', spreadOdds2: '-105',
+        total: '221.5', totalOver: '-110', totalUnder: '-110',
         ml1: '-300', ml2: '+250'
       },
       {
@@ -487,8 +510,8 @@ class Play23Client {
         time: '8:10 PM',
         team1: { name: 'BOS CELTICS', rot: '569' },
         team2: { name: 'DAL MAVERICKS', rot: '570' },
-        spread1: '-5½', spreadOdds1: '-110',
-        spread2: '+5½', spreadOdds2: '-110',
+        spread1: '-5.5', spreadOdds1: '-110',
+        spread2: '+5.5', spreadOdds2: '-110',
         total: '218', totalOver: '-110', totalUnder: '-110',
         ml1: '-220', ml2: '+180'
       },
@@ -500,7 +523,7 @@ class Play23Client {
         team2: { name: 'DET PISTONS', rot: '562' },
         spread1: '-9', spreadOdds1: '-110',
         spread2: '+9', spreadOdds2: '-110',
-        total: '224½', totalOver: '-110', totalUnder: '-110',
+        total: '224.5', totalOver: '-110', totalUnder: '-110',
         ml1: '-400', ml2: '+320'
       }
     ];
@@ -514,7 +537,7 @@ class Play23Client {
         team2: { name: 'BUF BILLS', rot: '102' },
         spread1: '-3', spreadOdds1: '-110',
         spread2: '+3', spreadOdds2: '-110',
-        total: '51½', totalOver: '-110', totalUnder: '-110',
+        total: '51.5', totalOver: '-110', totalUnder: '-110',
         ml1: '-150', ml2: '+130'
       },
       {
@@ -523,8 +546,8 @@ class Play23Client {
         time: '4:25 PM',
         team1: { name: 'SF 49ERS', rot: '103' },
         team2: { name: 'PHI EAGLES', rot: '104' },
-        spread1: '+1½', spreadOdds1: '-110',
-        spread2: '-1½', spreadOdds2: '-110',
+        spread1: '+1.5', spreadOdds1: '-110',
+        spread2: '-1.5', spreadOdds2: '-110',
         total: '47', totalOver: '-110', totalUnder: '-110',
         ml1: '+105', ml2: '-125'
       }
@@ -537,9 +560,9 @@ class Play23Client {
         time: '7:00 PM',
         team1: { name: 'DUKE', rot: '501' },
         team2: { name: 'UNC', rot: '502' },
-        spread1: '-4½', spreadOdds1: '-110',
-        spread2: '+4½', spreadOdds2: '-110',
-        total: '145½', totalOver: '-110', totalUnder: '-110',
+        spread1: '-4.5', spreadOdds1: '-110',
+        spread2: '+4.5', spreadOdds2: '-110',
+        total: '145.5', totalOver: '-110', totalUnder: '-110',
         ml1: '-180', ml2: '+155'
       },
       {
@@ -642,7 +665,13 @@ class Play23Client {
       games = nbaGames;
     }
 
-    return { leagueId, games, source: 'fallback', message };
+    // Add selection strings to each game
+    const gamesWithSel = games.map(game => ({
+      ...game,
+      sel: this.generateSelStrings(game)
+    }));
+
+    return { leagueId, games: gamesWithSel, source: 'fallback', message };
   }
 
   /**
