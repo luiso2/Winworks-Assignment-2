@@ -1,0 +1,611 @@
+openapi: 3.0.3
+info:
+  title: Play23 Bet Finder API
+  description: |
+    Backend API for the Play23 Bet Finder application.
+    This API proxies requests to Play23.ag's backend, handling authentication,
+    odds retrieval, and bet placement.
+
+    ## Authentication
+    All endpoints except `/api/login` and `/api/health` require a session ID
+    passed in the `X-Session-Id` header. Obtain this ID from a successful login.
+
+    ## Error Handling
+    The API returns specific HTTP status codes for different error conditions:
+    - `400` - Bad Request (invalid parameters, minimum bet not met)
+    - `401` - Unauthorized (not authenticated, invalid password)
+    - `402` - Payment Required (insufficient balance)
+    - `409` - Conflict (odds have changed)
+    - `410` - Gone (market closed)
+    - `500` - Internal Server Error
+  version: 1.0.0
+  contact:
+    name: Winworks Assignment
+    url: https://github.com/luiso2/Winworks-Assignment-2
+
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: Login and logout operations
+  - name: Odds
+    description: Sports and odds retrieval
+  - name: Betting
+    description: Bet placement operations
+  - name: Account
+    description: Account information
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      description: Returns server health status
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-02-03T19:30:00.000Z"
+
+  /api/login:
+    post:
+      summary: Login to Play23
+      description: Authenticates user with Play23.ag and returns a session ID
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: Play23 username
+                  example: wwplayer1
+                password:
+                  type: string
+                  description: Play23 password
+                  example: "123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  sessionId:
+                    type: string
+                    description: Session ID for subsequent requests
+                    example: session_1706987400000_abc123xyz
+                  balance:
+                    $ref: '#/components/schemas/Balance'
+                  message:
+                    type: string
+                    example: "Welcome back, wwplayer1!"
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/logout:
+    post:
+      summary: Logout from Play23
+      description: Ends the current session
+      tags:
+        - Authentication
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Logged out successfully
+
+  /api/sports:
+    get:
+      summary: Get available sports
+      description: Returns list of available sports and leagues
+      tags:
+        - Odds
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Sports list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  sports:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 535
+                        name:
+                          type: string
+                          example: NBA
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/odds/{leagueId}:
+    get:
+      summary: Get odds for a league
+      description: Returns games and betting odds for the specified league
+      tags:
+        - Odds
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: leagueId
+          in: path
+          required: true
+          description: League identifier
+          schema:
+            type: integer
+            example: 535
+        - name: wagerType
+          in: query
+          description: |
+            Type of wager:
+            - 0 = Straight bet
+            - 1 = Parlay
+            - 2 = Teaser
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+            default: 0
+      responses:
+        '200':
+          description: Odds retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  odds:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                        enum: [live, cached]
+                        example: live
+                      games:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Game'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/search:
+    get:
+      summary: Search for games
+      description: Search for games by team name
+      tags:
+        - Odds
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: q
+          in: query
+          required: true
+          description: Search query (team name)
+          schema:
+            type: string
+            example: Lakers
+        - name: leagueId
+          in: query
+          description: League to search in
+          schema:
+            type: integer
+            default: 535
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Game'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/bet:
+    post:
+      summary: Place a bet
+      description: |
+        Places a bet on Play23. Requires password confirmation.
+
+        The selection string format is: `{play}_{gameId}_{points}_{odds}`
+
+        Example: `0_5421290_5_-110` means:
+        - play: 0 (spread bet on team 1)
+        - gameId: 5421290
+        - points: 5 (spread)
+        - odds: -110
+      tags:
+        - Betting
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - selection
+                - amount
+                - password
+              properties:
+                selection:
+                  type: string
+                  description: Bet selection string from odds response
+                  example: "0_5421290_5_-110"
+                amount:
+                  type: number
+                  minimum: 25
+                  description: Bet amount in dollars (minimum $25)
+                  example: 50
+                password:
+                  type: string
+                  description: Account password for confirmation
+                  example: "123"
+                wagerType:
+                  type: integer
+                  enum: [0, 1, 2]
+                  default: 0
+                  description: Wager type (0=straight, 1=parlay, 2=teaser)
+                leagueId:
+                  type: integer
+                  default: 535
+                  description: League ID for the bet
+      responses:
+        '200':
+          description: Bet placed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  ticketNumber:
+                    type: string
+                    description: Confirmation ticket number
+                    example: "207812822"
+                  risking:
+                    type: number
+                    description: Amount risked
+                    example: 50
+                  toWin:
+                    type: number
+                    description: Potential winnings
+                    example: 45.45
+                  message:
+                    type: string
+                    example: Bet placed successfully!
+        '400':
+          description: Bad request (invalid selection, minimum not met)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetError'
+        '401':
+          description: Unauthorized or invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetError'
+        '402':
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetError'
+              example:
+                success: false
+                error: Insufficient balance
+                errorType: INSUFFICIENT_BALANCE
+        '409':
+          description: Odds have changed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BetError'
+                  - type: object
+                    properties:
+                      newOdds:
+                        type: string
+                        description: Updated odds value
+              example:
+                success: false
+                error: Odds have changed
+                errorType: ODDS_CHANGED
+                newOdds: "-115"
+        '410':
+          description: Market closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetError'
+              example:
+                success: false
+                error: Market is closed
+                errorType: MARKET_CLOSED
+
+  /api/balance:
+    get:
+      summary: Get account balance
+      description: Returns current account balance information
+      tags:
+        - Account
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  balance:
+                    $ref: '#/components/schemas/Balance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/open-bets:
+    get:
+      summary: Get open bets
+      description: Returns list of currently open (pending) bets
+      tags:
+        - Account
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Open bets retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  openBets:
+                    type: object
+                    properties:
+                      bets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            ticketNumber:
+                              type: string
+                            amount:
+                              type: number
+                            toWin:
+                              type: number
+                            selection:
+                              type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  parameters:
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      description: Session ID obtained from login
+      schema:
+        type: string
+        example: session_1706987400000_abc123xyz
+
+  schemas:
+    Balance:
+      type: object
+      properties:
+        current:
+          type: number
+          description: Current total balance
+          example: 10000
+        available:
+          type: number
+          description: Available balance for betting
+          example: 9500
+        atRisk:
+          type: number
+          description: Amount currently at risk in open bets
+          example: 500
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique game identifier
+          example: 5421290
+        team1:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Los Angeles Lakers
+            rot:
+              type: integer
+              description: Rotation number
+              example: 501
+        team2:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Golden State Warriors
+            rot:
+              type: integer
+              example: 502
+        date:
+          type: string
+          example: "02/04"
+        time:
+          type: string
+          example: "19:30"
+        spread1:
+          type: string
+          description: Spread for team 1
+          example: "-5½"
+        spread2:
+          type: string
+          description: Spread for team 2
+          example: "+5½"
+        spreadOdds1:
+          type: string
+          example: "-110"
+        spreadOdds2:
+          type: string
+          example: "-110"
+        total:
+          type: string
+          description: Over/under total
+          example: "225½"
+        totalOver:
+          type: string
+          example: "-110"
+        totalUnder:
+          type: string
+          example: "-110"
+        ml1:
+          type: string
+          description: Moneyline for team 1
+          example: "-200"
+        ml2:
+          type: string
+          description: Moneyline for team 2
+          example: "+170"
+        sel:
+          type: object
+          description: Pre-built selection strings for bet placement
+          properties:
+            spread1:
+              type: string
+              example: "0_5421290_-5.5_-110"
+            spread2:
+              type: string
+              example: "1_5421290_5.5_-110"
+            over:
+              type: string
+              example: "2_5421290_225.5_-110"
+            under:
+              type: string
+              example: "3_5421290_225.5_-110"
+            ml1:
+              type: string
+              example: "4_5421290_-200_-200"
+            ml2:
+              type: string
+              example: "5_5421290_170_170"
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+          example: Not authenticated
+
+    BetError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+          example: Odds have changed
+        errorType:
+          type: string
+          enum:
+            - ODDS_CHANGED
+            - INSUFFICIENT_BALANCE
+            - MARKET_CLOSED
+            - MIN_BET_NOT_MET
+            - INVALID_PASSWORD
+            - INVALID_SELECTION
+            - SERVER_ERROR
+          description: Machine-readable error type
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error: Not authenticated
