@@ -488,181 +488,29 @@ class Play23Client {
   }
 
   /**
-   * Fallback games when live parsing fails
+   * Fallback when live parsing fails - returns empty array with helpful message
+   * IMPORTANT: Never return fake/hardcoded data - only real Play23 data
    */
   getFallbackGames(leagueId) {
-    // Return league-appropriate sample data
-    const nbaGames = [
-      {
-        id: '5421295',
-        date: 'Today',
-        time: '7:40 PM',
-        team1: { name: 'LA LAKERS', rot: '565' },
-        team2: { name: 'BRK NETS', rot: '566' },
-        spread1: '-7.5', spreadOdds1: '-115',
-        spread2: '+7.5', spreadOdds2: '-105',
-        total: '221.5', totalOver: '-110', totalUnder: '-110',
-        ml1: '-300', ml2: '+250'
-      },
-      {
-        id: '5421296',
-        date: 'Today',
-        time: '8:10 PM',
-        team1: { name: 'BOS CELTICS', rot: '569' },
-        team2: { name: 'DAL MAVERICKS', rot: '570' },
-        spread1: '-5.5', spreadOdds1: '-110',
-        spread2: '+5.5', spreadOdds2: '-110',
-        total: '218', totalOver: '-110', totalUnder: '-110',
-        ml1: '-220', ml2: '+180'
-      },
-      {
-        id: '5421297',
-        date: 'Today',
-        time: '7:10 PM',
-        team1: { name: 'DEN NUGGETS', rot: '561' },
-        team2: { name: 'DET PISTONS', rot: '562' },
-        spread1: '-9', spreadOdds1: '-110',
-        spread2: '+9', spreadOdds2: '-110',
-        total: '224.5', totalOver: '-110', totalUnder: '-110',
-        ml1: '-400', ml2: '+320'
-      }
-    ];
+    const leagueIdNum = parseInt(leagueId);
+    let message = 'No games currently available for this league';
 
-    const nflGames = [
-      {
-        id: '4021001',
-        date: 'Sunday',
-        time: '1:00 PM',
-        team1: { name: 'KC CHIEFS', rot: '101' },
-        team2: { name: 'BUF BILLS', rot: '102' },
-        spread1: '-3', spreadOdds1: '-110',
-        spread2: '+3', spreadOdds2: '-110',
-        total: '51.5', totalOver: '-110', totalUnder: '-110',
-        ml1: '-150', ml2: '+130'
-      },
-      {
-        id: '4021002',
-        date: 'Sunday',
-        time: '4:25 PM',
-        team1: { name: 'SF 49ERS', rot: '103' },
-        team2: { name: 'PHI EAGLES', rot: '104' },
-        spread1: '+1.5', spreadOdds1: '-110',
-        spread2: '-1.5', spreadOdds2: '-110',
-        total: '47', totalOver: '-110', totalUnder: '-110',
-        ml1: '+105', ml2: '-125'
-      }
-    ];
+    // Empty games array - we never show fake data
+    const games = [];
 
-    const collegeGames = [
-      {
-        id: '4301001',
-        date: 'Today',
-        time: '7:00 PM',
-        team1: { name: 'DUKE', rot: '501' },
-        team2: { name: 'UNC', rot: '502' },
-        spread1: '-4.5', spreadOdds1: '-110',
-        spread2: '+4.5', spreadOdds2: '-110',
-        total: '145.5', totalOver: '-110', totalUnder: '-110',
-        ml1: '-180', ml2: '+155'
-      },
-      {
-        id: '4301002',
-        date: 'Today',
-        time: '9:00 PM',
-        team1: { name: 'KANSAS', rot: '503' },
-        team2: { name: 'KENTUCKY', rot: '504' },
-        spread1: '-2', spreadOdds1: '-110',
-        spread2: '+2', spreadOdds2: '-110',
-        total: '152', totalOver: '-110', totalUnder: '-110',
-        ml1: '-130', ml2: '+110'
-      }
-    ];
-
-    const mlbGames = [
-      {
-        id: '1001001',
-        date: 'Today',
-        time: '7:05 PM',
-        team1: { name: 'NY YANKEES', rot: '901' },
-        team2: { name: 'BOS RED SOX', rot: '902' },
-        spread1: '-1½', spreadOdds1: '+145',
-        spread2: '+1½', spreadOdds2: '-165',
-        total: '8½', totalOver: '-110', totalUnder: '-110',
-        ml1: '-150', ml2: '+130'
-      },
-      {
-        id: '1001002',
-        date: 'Today',
-        time: '10:10 PM',
-        team1: { name: 'LA DODGERS', rot: '903' },
-        team2: { name: 'SF GIANTS', rot: '904' },
-        spread1: '-1½', spreadOdds1: '+130',
-        spread2: '+1½', spreadOdds2: '-150',
-        total: '7½', totalOver: '-105', totalUnder: '-115',
-        ml1: '-175', ml2: '+155'
-      },
-      {
-        id: '1001003',
-        date: 'Today',
-        time: '8:10 PM',
-        team1: { name: 'CHI CUBS', rot: '905' },
-        team2: { name: 'STL CARDINALS', rot: '906' },
-        spread1: '+1½', spreadOdds1: '-150',
-        spread2: '-1½', spreadOdds2: '+130',
-        total: '9', totalOver: '-110', totalUnder: '-110',
-        ml1: '+120', ml2: '-140'
-      }
-    ];
-
-    const nhlGames = [
-      {
-        id: '2001001',
-        date: 'Today',
-        time: '7:00 PM',
-        team1: { name: 'TOR MAPLE LEAFS', rot: '201' },
-        team2: { name: 'MTL CANADIENS', rot: '202' },
-        spread1: '-1½', spreadOdds1: '+175',
-        spread2: '+1½', spreadOdds2: '-200',
-        total: '6½', totalOver: '-110', totalUnder: '-110',
-        ml1: '-145', ml2: '+125'
-      },
-      {
-        id: '2001002',
-        date: 'Today',
-        time: '10:00 PM',
-        team1: { name: 'VGS GOLDEN KNIGHTS', rot: '203' },
-        team2: { name: 'LA KINGS', rot: '204' },
-        spread1: '-1½', spreadOdds1: '+160',
-        spread2: '+1½', spreadOdds2: '-180',
-        total: '5½', totalOver: '-105', totalUnder: '-115',
-        ml1: '-130', ml2: '+110'
-      },
-      {
-        id: '2001003',
-        date: 'Today',
-        time: '7:30 PM',
-        team1: { name: 'BOS BRUINS', rot: '205' },
-        team2: { name: 'NY RANGERS', rot: '206' },
-        spread1: '+1½', spreadOdds1: '-190',
-        spread2: '-1½', spreadOdds2: '+165',
-        total: '6', totalOver: '-110', totalUnder: '-110',
-        ml1: '+105', ml2: '-125'
-      }
-    ];
-
-    let games;
-    let message = null;
-
-    if (leagueId == 4029) {
-      games = nflGames;
-    } else if (leagueId == 43) {
-      games = collegeGames;
-    } else if (leagueId == 1 || leagueId == 2) {
-      // MLB and NHL - not currently available on Play23
-      games = [];
-      message = 'No games currently available for this league';
+    // Provide helpful messages based on league
+    if (leagueIdNum === 4029) {
+      message = 'No NFL games available (check if off-season)';
+    } else if (leagueIdNum === 535) {
+      message = 'No NBA games available at this time';
+    } else if (leagueIdNum === 43) {
+      message = 'No College Basketball games available at this time';
+    } else if (leagueIdNum === 430) {
+      message = 'No NFL 1st Half games available';
+    } else if (leagueIdNum === 3 || leagueIdNum === 1278 || leagueIdNum === 1566) {
+      message = 'No soccer games available';
     } else {
-      games = nbaGames;
+      message = `No games available for league ${leagueIdNum}`;
     }
 
     // Add selection strings to each game
