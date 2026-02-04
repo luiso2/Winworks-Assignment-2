@@ -281,12 +281,12 @@ class Play23Client {
             const over = parseTotal(line.ovh, line.unt); // unt is the total number
             const under = parseTotal(line.unh, line.unt);
 
-            // Format date
-            const dateStr = game.gmdt; // "20260203"
-            const timeStr = game.gmtm; // "22:10:00"
-            const formattedDate = dateStr ?
+            // Format date - ensure values are strings before using substring
+            const dateStr = game.gmdt ? String(game.gmdt) : null; // "20260203"
+            const timeStr = game.gmtm ? String(game.gmtm) : null; // "22:10:00"
+            const formattedDate = dateStr && dateStr.length >= 8 ?
               `${dateStr.substring(4,6)}/${dateStr.substring(6,8)}` : 'Today';
-            const formattedTime = timeStr ?
+            const formattedTime = timeStr && timeStr.length >= 5 ?
               timeStr.substring(0, 5) : 'TBD';
 
             games.push({
@@ -970,9 +970,10 @@ class Play23Client {
       const response = await this.client.get('/wager/OpenBets.aspx');
       // Parse open bets from HTML
       // This would need proper HTML parsing in production
+      const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       return {
         bets: [],
-        rawHtml: response.data.substring(0, 500)
+        rawHtml: rawData.substring(0, 500)
       };
     } catch (error) {
       console.error('Get open bets error:', error.message);
