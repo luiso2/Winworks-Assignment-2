@@ -26,6 +26,14 @@ A third challenge was discovering the correct post endpoint. `PostWagerHelper.as
 
 The balance endpoint also had a subtle bug—it returns JSON, not HTML, but our code was trying to parse HTML. This caused 500 errors until fixed.
 
+Additional hardening was required after initial testing:
+
+1. **String type validation**: Several endpoints returned numeric fields that could be `null` or numbers instead of strings. Calling `.substring()` on these values caused "Cannot read properties of undefined (reading 'substring')" errors. The fix was to wrap all values with `String()` and validate length before calling string methods.
+
+2. **nestedDetail validation**: The compile response structure wasn't always consistent. Added explicit validation: `if (!nestedDetail || !nestedDetail.IdGame)` before accessing nested properties.
+
+3. **Frontend selection validation**: The frontend could send "undefined" as the selection string if the `sel` property wasn't properly passed through the button click handler. Added validation in `placeBet()` to check `selectedBet.selection` exists and contains valid format (includes underscore separator).
+
 ## What I Would Do Differently
 
 Given more time, I would:
@@ -57,5 +65,11 @@ Given more time, I would:
 6. **JSON vs HTML responses vary by endpoint**: Some endpoints return JSON, others return HTML. Don't assume consistency—verify each endpoint's response format.
 
 7. **Systematic variation testing**: When an API returns unhelpful errors, create test scripts that try multiple parameter variations systematically. This approach found the `amountType` issue after manual debugging failed.
+
+8. **Defensive string handling**: Always validate types before calling string methods. Use `String(value)` conversion and length checks before `.substring()`. API responses may return `null`, numbers, or undefined where strings are expected.
+
+9. **Validate data flow end-to-end**: A bug in the frontend (not passing `sel` to click handler) manifested as a backend error. Testing the backend with curl confirmed it worked, which isolated the bug to the frontend. Always test each layer independently.
+
+10. **Console logging for debugging**: Strategic `console.log()` statements in event handlers helped identify that `sel` was undefined. Remove these logs before production, but they're invaluable during development.
 
 This project reinforced that reverse-engineering isn't about guessing—it's about systematic observation and verification. The AI accelerated both the discovery process and the implementation, but the engineering judgment about architecture, error handling, and edge cases remained human decisions. The critical fixes (amountType, endpoint, field names) were discovered through methodical testing, not intuition.

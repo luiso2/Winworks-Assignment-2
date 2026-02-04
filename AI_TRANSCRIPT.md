@@ -706,9 +706,119 @@ async getBalance() {
 - Vanilla JavaScript - Frontend (no framework needed for this scope)
 
 **Final Verification:**
-- 5 successful bets placed via API (Tickets: 207810253, 207810333, 207810429, 207810485, 207811149)
+- 15+ successful bets placed via API
 - All bets confirmed on Play23.ag account
 - Complete flow working: Login → Get Odds → Select Bet → Place Bet → Get Ticket
+
+---
+
+# Part 4: Additional Bug Fixes and Hardening
+
+## Prompt 19: Frontend Validation Issues
+
+**Me:**
+```
+The frontend sometimes sends "undefined" as the selection string
+```
+
+**Claude:**
+Added validation in the frontend before sending the bet request:
+
+```javascript
+// Validate selection string exists and is valid
+if (!selectedBet.selection || selectedBet.selection === 'undefined' || !selectedBet.selection.includes('_')) {
+  showAppStatus('Invalid bet selection. Please refresh and select again.', 'error');
+  return;
+}
+```
+
+Also added console logging in selectBet() for debugging:
+```javascript
+console.log('selectBet called:', { gameId, team, type, line, odds, sel });
+```
+
+---
+
+## Prompt 20: Substring Errors on Non-String Values
+
+**Me:**
+```
+Getting "Cannot read properties of undefined (reading 'substring')" errors
+```
+
+**Claude:**
+Found multiple places where `.substring()` was called without proper validation:
+
+**Fix 1: Date/Time formatting**
+```javascript
+// BEFORE (could fail if value is number or undefined)
+const formattedDate = dateStr ? `${dateStr.substring(4,6)}...` : 'Today';
+
+// AFTER (convert to string and validate length)
+const dateStr = game.gmdt ? String(game.gmdt) : null;
+const formattedDate = dateStr && dateStr.length >= 8 ?
+  `${dateStr.substring(4,6)}/${dateStr.substring(6,8)}` : 'Today';
+```
+
+**Fix 2: Raw HTML handling**
+```javascript
+// BEFORE (fails if response is JSON object)
+rawHtml: response.data.substring(0, 500)
+
+// AFTER (handle both string and object responses)
+const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+return { bets: [], rawHtml: rawData.substring(0, 500) };
+```
+
+**Fix 3: nestedDetail validation**
+```javascript
+if (!nestedDetail || !nestedDetail.IdGame) {
+  return {
+    success: false,
+    error: 'Invalid bet selection - please refresh odds and try again',
+    errorType: 'INVALID_SELECTION'
+  };
+}
+```
+
+---
+
+## Final Verified Tickets
+
+| Ticket # | Description | Risk | Win | Time |
+|----------|-------------|------|-----|------|
+| 207810253 | PHI 76ERS +5-110 | $28 | $25 | Initial test |
+| 207810333 | PHI 76ERS +5-110 | $28 | $25 | Confirmed fix |
+| 207810429 | PHI 76ERS +5-110 | $28 | $25 | Test script |
+| 207810485 | PHI 76ERS +5-110 | $28 | $25 | API test |
+| 207811149 | PHI 76ERS +5-110 | $28 | $25 | Full flow |
+| 207812111 | PHI 76ERS +5-110 | $28 | $25 | Session test |
+| 207812354 | PHI 76ERS +5-110 | $28 | $25 | Validation test |
+| 207812716 | PHI 76ERS +5-110 | $28 | $25 | Multi-bet #1 |
+| 207812718 | PHI 76ERS +5-110 | $28 | $25 | Multi-bet #2 |
+| 207812719 | PHI 76ERS +5-110 | $28 | $25 | Multi-bet #3 |
+| 207812754 | PHI 76ERS +5-110 | $28 | $25 | Final test #1 |
+| 207812756 | PHI 76ERS +5-110 | $28 | $25 | Final test #2 |
+| 207812818 | PHI 76ERS +5-110 | $28 | $25 | Stress test #1 |
+| 207812819 | PHI 76ERS +5-110 | $28 | $25 | Stress test #2 |
+| 207812822 | PHI 76ERS +5-110 | $28 | $25 | Stress test #3 |
+
+---
+
+# Summary
+
+**Total Development Time:** ~4 hours
+
+**Deliverables:**
+1. ✅ Working bet finder frontend
+2. ✅ Working bet placer backend (direct API, no browser automation)
+3. ✅ 15+ successful bet placements verified
+4. ✅ Error handling for all common scenarios
+5. ✅ Demo video (winworks-demo-compressed.mp4)
+6. ✅ Complete AI transcript (this document)
+7. ✅ Reflection document
+
+**GitHub Repository:** https://github.com/luiso2/Winworks-Assignment-2
 
 ---
 
